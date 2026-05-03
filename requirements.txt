@@ -1,0 +1,11 @@
+streamlit
+python-dotenv
+crewai>=1.11.0
+google-genai
+crewai-tools
+litellm
+pydantic>=2.4.1
+langchain-community
+langchain-google-genai
+pypdf
+chromadb
