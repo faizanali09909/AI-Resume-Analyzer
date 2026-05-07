@@ -71,10 +71,15 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+from typing import Any
+
 class SearchResumeTool(BaseTool):
     name: str = "Search Resume"
     description: str = "Search the candidate's resume for specific skills, experience, or education details."
-    vectorstore: object = None
+    vectorstore: Any = None
+
+    class Config:
+        arbitrary_types_allowed = True
 
     def _run(self, query: str) -> str:
         results = self.vectorstore.similarity_search(query, k=3)
