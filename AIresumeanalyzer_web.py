@@ -1,4 +1,14 @@
 import os
+import sys
+
+# Fix for Streamlit Cloud SQLite version requirement by ChromaDB
+try:
+    __import__('pysqlite3')
+    import sys
+    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+except ImportError:
+    pass
+
 import streamlit as st
 from crewai import Agent, Task, Crew, LLM
 from crewai.tools import tool

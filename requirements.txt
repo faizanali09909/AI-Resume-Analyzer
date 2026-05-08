@@ -6,10 +6,13 @@ crewai-tools
 litellm
 pydantic>=2.4.1
 pydantic-settings
+langchain
+langchain-core
 langchain-community
 langchain-google-genai
 pypdf
 chromadb>=0.4.15
+pysqlite3-binary
 fastapi
 uvicorn
 python-multipart
