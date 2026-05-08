@@ -1,4 +1,3 @@
-import os
 import sys
 
 # Fix for Streamlit Cloud SQLite version requirement by ChromaDB
@@ -9,8 +8,18 @@ try:
 except ImportError:
     pass
 
+import os
 import streamlit as st
-from crewai import Agent, Task, Crew, LLM
+
+# Diagnostic block to find the hidden ImportError
+try:
+    from crewai import Agent, Task, Crew, LLM
+    from langchain_google_genai import GoogleGenerativeAIEmbeddings
+    import chromadb
+except ImportError as e:
+    st.error(f"❌ Critical Import Error: {e}")
+    st.stop()
+
 from crewai.tools import tool
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
