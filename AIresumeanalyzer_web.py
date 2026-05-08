@@ -1,16 +1,23 @@
 import os
 import streamlit as st
 from crewai import Agent, Task, Crew, LLM
-from crewai_tools import BaseTool
+from crewai.tools import tool
+from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 import tempfile
-from dotenv import load_dotenv
+import time
+import re
 
 # Load environment variables
 load_dotenv()
+
+# Sync API Keys
+api_key = os.getenv("GEMINI_API_KEY")
+if api_key and not os.getenv("GOOGLE_API_KEY"):
+    os.environ["GOOGLE_API_KEY"] = api_key
 
 # Page configuration
 st.set_page_config(
@@ -73,22 +80,12 @@ st.markdown("""
 
 from typing import Any
 
-class SearchResumeTool(BaseTool):
-    name: str = "Search Resume"
-    description: str = "Search the candidate's resume for specific skills, experience, or education details."
-    vectorstore: Any = None
-
-    class Config:
-        arbitrary_types_allowed = True
-
-    def _run(self, query: str) -> str:
-        results = self.vectorstore.similarity_search(query, k=3)
-        return "\n".join([r.page_content for r in results])
+from crewai.tools import tool
 
 def setup_resume_rag(pdf_path):
     loader = PyPDFLoader(pdf_path)
     docs = loader.load()
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=600, chunk_overlap=60)
     chunks = splitter.split_documents(docs)
     
     embeddings = GoogleGenerativeAIEmbeddings(
@@ -100,10 +97,15 @@ def setup_resume_rag(pdf_path):
 
 def analyze_resume(pdf_path, job_description):
     vectorstore = setup_resume_rag(pdf_path)
-    resume_tool = SearchResumeTool(vectorstore=vectorstore)
+    
+    @tool("Search Resume")
+    def resume_tool(query: str):
+        """Search the candidate's resume for specific skills, experience, or education details."""
+        results = vectorstore.similarity_search(query, k=2)
+        return "\n".join([r.page_content for r in results])
 
-    # Use Groq for speed
-    llm = LLM(model="groq/llama-3.1-8b-instant", api_key=os.getenv("GROQ_API_KEY"))
+    # Use Gemini Flash for reliability and higher limits
+    llm = LLM(model="gemini/gemini-flash-latest", api_key=os.getenv("GEMINI_API_KEY"))
 
     extractor = Agent(
         role="Resume Extractor",
@@ -152,7 +154,42 @@ def analyze_resume(pdf_path, job_description):
         verbose=True
     )
 
-    return crew.kickoff()
+    return run_crew_with_retry(crew)
+
+def run_crew_with_retry(crew, inputs=None, max_retries=5):
+    """Run crew with retry logic for handling rate limit and 503 errors"""
+    for attempt in range(max_retries):
+        try:
+            return crew.kickoff(inputs=inputs) if inputs else crew.kickoff()
+        except Exception as e:
+            error_str = str(e)
+            # Handle 503 - Service Unavailable
+            if "503" in error_str or "UNAVAILABLE" in error_str:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 2
+                    st.warning(f"🤖 Model busy, retrying in {wait_time} seconds... (Attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                else:
+                    raise e
+            # Handle 429 - Rate Limit Exceeded
+            elif "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                if attempt < max_retries - 1:
+                    # Extract retry delay from error if available, otherwise use default
+                    wait_time = 20  # Default 20 seconds for rate limits
+                    if "retryDelay" in error_str:
+                        try:
+                            # Try to parse the retry delay from error
+                            match = re.search(r'(\d+)s', error_str)
+                            if match:
+                                wait_time = int(match.group(1)) + 2  # Add buffer
+                        except:
+                            pass
+                    st.warning(f"⏱️ Rate limit hit! Waiting {wait_time} seconds... (Attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                else:
+                    raise e
+            else:
+                raise e
 
 # App UI
 st.markdown("<h1 class='main-header'>AI Resume Analyzer Pro</h1>", unsafe_allow_html=True)
