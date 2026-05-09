@@ -11,21 +11,29 @@ except ImportError:
 import os
 import streamlit as st
 
+# Page configuration MUST be the first Streamlit command
+st.set_page_config(
+    page_title="AI Resume Analyzer Pro",
+    page_icon="📄",
+    layout="wide"
+)
+
 # Diagnostic block to find the hidden ImportError
 try:
     from crewai import Agent, Task, Crew, LLM
+    from crewai.tools import tool
     from langchain_google_genai import GoogleGenerativeAIEmbeddings
+    from langchain_community.document_loaders import PyPDFLoader
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+    from langchain_community.vectorstores import Chroma
     import chromadb
 except ImportError as e:
     st.error(f"❌ Critical Import Error: {e}")
+    st.info("💡 Please ensure all requirements are installed in your environment.")
+    st.code("pip install crewai crewai-tools langchain-google-genai langchain-community chromadb pypdf pysqlite3-binary")
     st.stop()
 
-from crewai.tools import tool
 from dotenv import load_dotenv
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 import tempfile
 import time
 import re
@@ -37,13 +45,6 @@ load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
 if api_key and not os.getenv("GOOGLE_API_KEY"):
     os.environ["GOOGLE_API_KEY"] = api_key
-
-# Page configuration
-st.set_page_config(
-    page_title="AI Resume Analyzer Pro",
-    page_icon="📄",
-    layout="wide"
-)
 
 # Custom CSS for Premium Look
 st.markdown("""
